@@ -70,9 +70,14 @@ class TaskController extends Controller
             'is_completed' => 'sometimes|boolean'
         ]);
 
+        $wasCompleted = $task->is_completed;
         $task->update($data);
 
-        return redirect()->back();
+        if ($request->has('is_completed') && $request->is_completed && !$wasCompleted) {
+            return redirect()->back()->with('task_completed', true)->with('success', 'Tarefa marcada como concluída!');
+        }
+
+        return redirect()->back()->with('success', 'Tarefa atualizada!');
     }
 
     // destroy task
