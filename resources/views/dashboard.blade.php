@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dashboard</title>
     <link href="https://fonts.bunny.net/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Nunito', sans-serif; margin:0; background: #f6f8fa; }
         .container { display:flex; min-height:100vh; align-items:center; justify-content:center; }
@@ -13,6 +14,8 @@
         p { color:#475569; margin-top:6px }
         .actions { margin-top:18px; display:flex; gap:12px; }
         .btn { background: #111827; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; border:none; cursor:pointer }
+        .chart-container { margin-top:18px; text-align:center; }
+        .chart-container canvas { width:200px; height:200px; }
     </style>
 </head>
 <body>
@@ -84,69 +87,92 @@
             </form>
         </div>
 
-        {{-- List tasks --}}
-        <div style="margin-top:18px;">
-            <h3 style="margin:0 0 8px 0;color:#0f172a;font-size:18px;">Minhas tarefas</h3>
+        {{-- Chart and Tasks Container --}}
+        <div style="display:flex;gap:20px;margin-top:18px;align-items:flex-start;">
+            {{-- Task Statistics Chart --}}
+            @php
+                $completed = $tasks->where('is_completed', true)->count();
+                $pending = $tasks->where('is_completed', false)->count();
+                $chartData = [
+                    'labels' => ['Concluídas', 'Pendentes'],
+                    'datasets' => [[
+                        'data' => [$completed, $pending],
+                        'backgroundColor' => ['#10b981', '#ef4444'],
+                        'borderWidth' => 1
+                    ]]
+                ];
+            @endphp
+            <div class="chart-container">
+                <h3 style="margin:0 0 12px 0;color:#0f172a;font-size:18px;">Estatísticas das Tarefas</h3>
+                <canvas id="tasksChart"></canvas>
+            </div>
 
-            @if (isset($tasks) && $tasks->count() > 0)
-                <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
-                    @foreach ($tasks as $task)
-                        @php $taskData = $task->only(["id","title","description","priority","due_date"]) @endphp
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:8px;border:1px solid #e6e9ef;background:#fff;">
-                            <div style="display:flex;gap:12px;align-items:center;">
-                                <form method="POST" action="{{ url('/tasks/'.$task->id) }}">
-                                    @csrf
-                                    @method('PATCH')
-                                    <input type="hidden" name="is_completed" value="{{ $task->is_completed ? 0 : 1 }}">
-                                    <button type="submit" style="background:none;border:none;cursor:pointer;margin-right:8px;font-size:18px;">
-                                        {!! $task->is_completed ? '&#x2705;' : '&#x2B1C;' !!}
-                                    </button>
-                                </form>
+            {{-- List tasks --}}
+            <div style="flex:1;">
+                <h3 style="margin:0 0 8px 0;color:#0f172a;font-size:18px;">Minhas tarefas</h3>
 
-                                <div>
-                                    <div style="font-weight:700;color:#0f172a;">{{ $task->title }}</div>
-                                    <div style="font-size:13px;color:#475569;">{{ $task->description }}</div>
-                                    @php
-                                        $days = $task->days_remaining; 
-                                        $badgeBg = $days === null ? '#e5e7eb' : ($days < 0 ? '#ef4444' : ($days === 0 ? '#fb923c' : ($days <= 7 ? '#f59e0b' : '#10b981')));
-                                        if ($days === null) {
-                                            $badgeText = '-';
-                                        } elseif ($days < 0) {
-                                            $badgeText = 'Vencida há '.abs($days).' dias';
-                                        } elseif ($days === 0) {
-                                            $badgeText = 'Hoje';
-                                        } else {
-                                            $badgeText = 'Faltam '.$days.' dias';
-                                        }
-                                    @endphp
-                                    <div style="font-size:12px;color:#6b7280;margin-top:6px;display:flex;align-items:center;gap:8px;">
-                                        <span>Prioridade: {{ $task->priority }} • {{ $task->due_status }}</span>
-                                        <span style="background:{{ $badgeBg }};color:#0f172a;padding:4px 8px;border-radius:999px;font-size:12px;">{{ $badgeText }}</span>
+                @if (isset($tasks) && $tasks->count() > 0)
+                    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                        @foreach ($tasks as $task)
+                            @php $taskData = $task->only(["id","title","description","priority","due_date"]) @endphp
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:8px;border:1px solid #e6e9ef;background:#fff;">
+                                <div style="display:flex;gap:12px;align-items:center;">
+                                    <form method="POST" action="{{ url('/tasks/'.$task->id) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="is_completed" value="{{ $task->is_completed ? 0 : 1 }}">
+                                        <button type="submit" style="background:none;border:none;cursor:pointer;margin-right:8px;font-size:18px;">
+                                            {!! $task->is_completed ? '&#x2705;' : '&#x2B1C;' !!}
+                                        </button>
+                                    </form>
+
+                                    <div>
+                                        <div style="font-weight:700;color:#0f172a;">{{ $task->title }}</div>
+                                        @php
+                                            $days = $task->days_remaining; 
+                                            $badgeBg = $days === null ? '#e5e7eb' : ($days < 0 ? '#ef4444' : ($days === 0 ? '#fb923c' : ($days <= 7 ? '#f59e0b' : '#10b981')));
+                                            if ($days === null) {
+                                                $badgeText = '-';
+                                            } elseif ($days < 0) {
+                                                $badgeText = 'Vencida há '.abs($days).' dias';
+                                            } elseif ($days === 0) {
+                                                $badgeText = 'Hoje';
+                                            } else {
+                                                $badgeText = 'Faltam '.$days.' dias';
+                                            }
+                                        @endphp
+                                        <div style="margin-top:4px;margin-bottom:4px;">
+                                            <span style="background:{{ $badgeBg }};color:#0f172a;padding:4px 8px;border-radius:999px;font-size:12px;">{{ $badgeText }}</span>
+                                        </div>
+                                        <div style="font-size:13px;color:#475569;">{{ $task->description }}</div>
+                                        <div style="font-size:12px;color:#6b7280;margin-top:6px;">
+                                            <span>Prioridade: {{ $task->priority }} • {{ $task->due_status }}</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div style="display:flex;gap:8px;align-items:center;">
-                                <form id="delete-form-{{ $task->id }}" method="POST" action="{{ url('/tasks/'.$task->id) }}" style="display:none;">
-                                    @csrf
-                                    @method('DELETE')
-                                </form>
-                                <button class="btn delete-btn" type="button" 
-                                    data-task-id="{{ $task->id }}"
-                                    data-task-title="{{ $task->title }}"
-                                    style="background:#ef4444;border:none;">Remover</button>
-                                
-                                <!-- Edit button -->
-                                <button class="btn edit-btn" type="button" 
-                                    data-task='@json($taskData)'
-                                    style="background:#1d4ed8;border:none;">Editar</button>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <form id="delete-form-{{ $task->id }}" method="POST" action="{{ url('/tasks/'.$task->id) }}" style="display:none;">
+                                        @csrf
+                                        @method('DELETE')
+                                    </form>
+                                    <button class="btn delete-btn" type="button" 
+                                        data-task-id="{{ $task->id }}"
+                                        data-task-title="{{ $task->title }}"
+                                        style="background:#ef4444;border:none;">Remover</button>
+                                    
+                                    <!-- Edit button -->
+                                    <button class="btn edit-btn" type="button" 
+                                        data-task='@json($taskData)'
+                                        style="background:#1d4ed8;border:none;">Editar</button>
+                                </div>
                             </div>
-                        </div>
-                    @endforeach
-                </div>
-            @else
-                <div style="color:#475569;margin-top:8px;">Nenhuma tarefa encontrada. Adicione sua primeira tarefa!</div>
-            @endif
+                        @endforeach
+                    </div>
+                @else
+                    <div style="color:#475569;margin-top:8px;">Nenhuma tarefa encontrada. Adicione sua primeira tarefa!</div>
+                @endif
+            </div>
         </div>
 
         {{-- Modal for clear all confirmation --}}
@@ -375,6 +401,30 @@
                 }
                 openEditModal(taskData);
             });
+        });
+
+        // Render tasks chart
+        var ctx = document.getElementById('tasksChart').getContext('2d');
+        var chartData = @json($chartData);
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: chartData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
+                    }
+                },
+                animation: {
+                    animateScale: true,
+                    animateRotate: true
+                }
+            }
         });
     });
     </script>
