@@ -20,6 +20,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [TaskController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/filter', [TaskController::class, 'dashboardFilter'])->name('dashboard.filter');
     Route::delete('/tasks/clear', [TaskController::class, 'clear'])->name('tasks.clear');
     Route::resource('tasks', TaskController::class)->except(['index', 'create', 'edit']);
 });

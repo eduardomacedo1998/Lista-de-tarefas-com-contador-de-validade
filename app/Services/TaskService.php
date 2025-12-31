@@ -14,9 +14,9 @@ class TaskService
         $this->taskRepository = $taskRepository;
     }
 
-    public function getUserTasks($userId)
+    public function getUserTasks($userId, array $filters = [])
     {
-        return $this->taskRepository->getAllByUser($userId);
+        return $this->taskRepository->getAllByUser($userId, $filters);
     }
 
     public function createTask(TaskDTO $taskDTO)
@@ -32,7 +32,7 @@ class TaskService
     public function deleteTask($id, $userId)
     {
         $task = $this->taskRepository->findById($id);
-        
+
         if ($task->user_id !== $userId) {
             throw new \Exception("Unauthorized", 403);
         }
@@ -48,7 +48,7 @@ class TaskService
     public function findTask($id, $userId)
     {
         $task = $this->taskRepository->findById($id);
-        
+
         if ($task->user_id !== $userId) {
             throw new \Exception("Unauthorized", 403);
         }

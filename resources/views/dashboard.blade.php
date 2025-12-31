@@ -34,6 +34,39 @@
 @endsection
 
 @section('content')
+
+    <div class="container mb-4" id="filter_task">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <form method="GET" action="{{ route('dashboard.filter') }}" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="filter_status" class="form-label small fw-bold text-muted">Status</label>
+                        <select name="status" id="filter_status" class="form-select">
+                            <option value="">Todos os Status</option>
+                            <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pendentes
+                            </option>
+                            <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Concluídas
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="filter_priority" class="form-label small fw-bold text-muted">Prioridade</label>
+                        <select name="priority" id="filter_priority" class="form-select">
+                            <option value="">Todas as Prioridades</option>
+                            <option value="3" {{ request('priority') == '3' ? 'selected' : '' }}>Alta</option>
+                            <option value="2" {{ request('priority') == '2' ? 'selected' : '' }}>Média</option>
+                            <option value="1" {{ request('priority') == '1' ? 'selected' : '' }}>Baixa</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                        <a href="{{ url('/dashboard') }}" class="btn btn-outline-secondary w-100">Limpar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
         <!-- Sidebar / Stats -->
         <div class="col-md-4">

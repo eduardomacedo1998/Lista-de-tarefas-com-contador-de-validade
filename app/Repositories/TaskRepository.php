@@ -7,23 +7,43 @@ use App\Models\Task;
 
 class TaskRepository implements TaskRepositoryInterface
 {
-    public function getAllByUser($userId)
+    /**
+     * @var Task
+     */
+    protected $model;
+
+    /**
+     * TaskRepository constructor.
+     * @param Task $model
+     */
+    public function __construct(Task $model)
     {
-        return Task::where('user_id', $userId)
-            ->orderBy('is_completed')
-            ->orderByDesc('priority')
-            ->orderByRaw('due_date IS NULL ASC, due_date ASC')
-            ->get();
+        $this->model = $model;
+    }
+
+    public function getAllByUser($userId, array $filters = [])
+    {
+        $query = $this->model->where('user_id', $userId);
+
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $query->where('is_completed', $filters['status'] === 'completed');
+        }
+
+        if (isset($filters['priority']) && $filters['priority'] !== '') {
+            $query->where('priority', $filters['priority']);
+        }
+
+        return $query->orderBy('priority', 'desc')->orderBy('due_date', 'asc')->get();
     }
 
     public function findById($id)
     {
-        return Task::findOrFail($id);
+        return $this->model->findOrFail($id);
     }
 
     public function create(array $data)
     {
-        return Task::create($data);
+        return $this->model->create($data);
     }
 
     public function update($id, array $data)

@@ -27,6 +27,14 @@ class TaskController extends Controller
         return view('dashboard', compact('tasks', 'user'));
     }
 
+    public function dashboardFilter(Request $request)
+    {
+        $filters = $request->only(['status', 'priority', 'due_date']);
+        $tasks = $this->taskService->getUserTasks(Auth::id(), $filters);
+        $user = Auth::user();
+        return view('dashboard', compact('tasks', 'user'));
+    }
+
     public function store(StoreTaskRequest $request)
     {
         $taskDTO = TaskDTO::fromRequest($request, Auth::id());
