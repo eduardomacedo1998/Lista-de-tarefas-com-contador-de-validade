@@ -2,119 +2,77 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Task;
-use App\Models\User;
+use App\Services\TaskService;
+use App\DTOs\TaskDTO;
+use App\Http\Requests\StoreTaskRequest;
+use App\Http\Requests\UpdateTaskRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Task;
 
 class TaskController extends Controller
 {
-    public function __construct()
+    protected $taskService;
+
+    public function __construct(TaskService $taskService)
     {
         $this->middleware('auth');
+        $this->taskService = $taskService;
     }
 
-    // Show tasks for the logged-in user - returns dashboard view
     public function index()
     {
-        /** @var User|null $user */
+        $tasks = $this->taskService->getUserTasks(Auth::id());
         $user = Auth::user();
-
-        if (! $user) {
-            // just in case, this route is protected by auth middleware but help the analyzer
-            abort(403);
-        }
-        $tasks = $user->tasks()
-            ->orderBy('is_completed')
-            ->orderByDesc('priority')
-            ->orderByRaw('due_date IS NULL ASC, due_date ASC')
-            ->get();
-
-        return view('dashboard', compact('tasks'));
+        return view('dashboard', compact('tasks', 'user'));
     }
 
-    // store a new task
-    public function store(Request $request)
+    public function store(StoreTaskRequest $request)
     {
-        $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'priority' => 'nullable|integer|min:1|max:3',
-            'due_date' => 'nullable|date',
-        ]);
-
-        $task = Task::create([
-            'title' => $data['title'],
-            'description' => $data['description'] ?? null,
-            'priority' => $data['priority'] ?? 1,
-            'due_date' => $data['due_date'] ?? null,
-            'user_id' => Auth::id(),
-        ]);
+        $taskDTO = TaskDTO::fromRequest($request, Auth::id());
+        $this->taskService->createTask($taskDTO);
 
         return redirect()->back()->with('success', 'Tarefa adicionada!');
     }
 
-    // toggle completion or update task
-    public function update(Request $request, Task $task)
+    public function update(UpdateTaskRequest $request, $id)
     {
-        // ensure the authenticated user owns the task
-        if ($task->user_id !== Auth::id()) {
-            abort(403);
+        try {
+            $task = $this->taskService->findTask($id, Auth::id());
+            $wasCompleted = $task->is_completed;
+
+            $taskDTO = TaskDTO::fromRequest($request, Auth::id());
+            $this->taskService->updateTask($id, $taskDTO);
+
+            if ($request->has('is_completed') && $request->is_completed && !$wasCompleted) {
+                return redirect()->back()->with('task_completed', true)->with('success', 'Tarefa marcada como concluída!');
+            }
+
+            return redirect()->back()->with('success', 'Tarefa atualizada!');
+        } catch (\Exception $e) {
+            if ($e->getCode() === 403) {
+                abort(403);
+            }
+            return redirect()->back()->withErrors(['error' => 'Erro ao atualizar tarefa.']);
         }
-
-        $data = $request->validate([
-            'title' => 'sometimes|required|string|max:255',
-            'description' => 'sometimes|nullable|string',
-            'priority' => 'sometimes|integer|min:1|max:3',
-            'due_date' => 'sometimes|nullable|date',
-            'is_completed' => 'sometimes|boolean'
-        ]);
-
-        $wasCompleted = $task->is_completed;
-        $task->update($data);
-
-        if ($request->has('is_completed') && $request->is_completed && !$wasCompleted) {
-            return redirect()->back()->with('task_completed', true)->with('success', 'Tarefa marcada como concluída!');
-        }
-
-        return redirect()->back()->with('success', 'Tarefa atualizada!');
     }
 
-    // destroy task
-    public function destroy(Task $task)
+    public function destroy($id)
     {
-        if ($task->user_id !== Auth::id()) {
-            abort(403);
+        try {
+            $this->taskService->deleteTask($id, Auth::id());
+            return redirect()->back()->with('success', 'Tarefa removida!');
+        } catch (\Exception $e) {
+            if ($e->getCode() === 403) {
+                abort(403);
+            }
+            return redirect()->back()->withErrors(['error' => 'Erro ao remover tarefa.']);
         }
-
-        $task->delete();
-
-        return redirect()->back();
     }
 
-    /**
-     * Delete all tasks for the authenticated user.
-     */
-    public function clear(Request $request)
+    public function clear()
     {
-        $userId = Auth::id();
-
-        // Double-check the user
-        if (! $userId) {
-            abort(403);
-        }
-
-        Task::where('user_id', $userId)->delete();
-
-        // Redirect to dashboard with success message after clearing tasks
-        return redirect()->route('dashboard')->with('success', 'Todas as tarefas foram removidas.');
-    }
-
-    /**
-     * Show confirmation page for clearing tasks.
-     */
-    public function confirmClear()
-    {
-        return view('tasks.confirm_clear');
+        $this->taskService->clearTasks(Auth::id());
+        return redirect()->back()->with('success', 'Todas as tarefas foram removidas!');
     }
 }

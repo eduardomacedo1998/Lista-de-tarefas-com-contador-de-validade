@@ -1,431 +1,384 @@
-<!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dashboard</title>
-    <link href="https://fonts.bunny.net/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+@extends('layouts.app')
+
+@section('title', 'Dashboard - Minhas Tarefas')
+
+@section('styles')
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: 'Nunito', sans-serif; margin:0; background: #f6f8fa; }
-        .container { display:flex; min-height:100vh; align-items:center; justify-content:center; }
-        .card { background:white; max-width:720px; width:100%; padding:28px; border-radius:12px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
-        h1 { margin:0; font-size:22px; color:#0f172a }
-        p { color:#475569; margin-top:6px }
-        .actions { margin-top:18px; display:flex; gap:12px; }
-        .btn { background: #111827; color:white; padding:10px 16px; border-radius:8px; text-decoration:none; border:none; cursor:pointer }
-        .chart-container { margin-top:18px; text-align:center; }
-        .chart-container canvas { width:200px; height:200px; }
+        .chart-container {
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .task-card {
+            transition: transform 0.2s;
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .priority-1 {
+            border-left: 5px solid #0dcaf0;
+        }
+
+        .priority-2 {
+            border-left: 5px solid #ffc107;
+        }
+
+        .priority-3 {
+            border-left: 5px solid #dc3545;
+        }
     </style>
-</head>
-<body>
-<div class="container">
-    <div class="card">
-        <h1>Bem-vindo(a), {{ auth()->user()->name }}</h1>
-        <p>Você está autenticado com o email: {{ auth()->user()->email }}</p>
+@endsection
 
-        <div style="margin-top:18px;display:flex;gap:12px;align-items:center;">
-            @if (isset($tasks) && $tasks->count() > 0)
-                <button id="clear-all-btn" class="btn" style="background:#ef4444;border:none;">Excluir todas as tarefas</button>
-
-                {{-- Hidden form to perform DELETE against tasks.clear --}}
-                <form id="clear-all-form" method="POST" action="{{ route('tasks.clear') }}" style="display:none;">
-                    @csrf
-                    @method('DELETE')
-                </form>
-            @endif
-
-            <form method="POST" action="{{ url('/logout') }}">
-                @csrf
-                <button class="btn" type="submit">Sair</button>
-            </form>
-        </div>
-
-        <hr style="margin-top:18px;border:none;border-top:1px solid #e6e9ef;">
-
-        {{-- Flash message and errors --}}
-        @if (session('success'))
-            <div style="margin-top:12px;padding:10px;border-radius:8px;background:#d1fae5;color:#065f46;font-weight:600;">{{ session('success') }}</div>
-        @endif
-        @if ($errors->any())
-            <div style="margin-top:12px;padding:10px;border-radius:8px;background:#fee2e2;color:#991b1b;">
-                <ul style="margin:0;padding-left:18px;">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
-        {{-- Add Task Form --}}
-        <div style="margin-top:18px">
-            <form method="POST" action="{{ url('/tasks') }}">
-                @csrf
-                <label for="title" style="display:block;font-size:13px;color:#334155;">Nova Tarefa</label>
-                <input type="text" name="title" id="title" placeholder="Título da tarefa" required style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;margin-top:6px;">
-
-                <label for="description" style="display:block;font-size:13px;color:#334155;margin-top:8px;">Descrição</label>
-                <textarea name="description" id="description" rows="3" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;margin-top:6px;"></textarea>
-
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <div style="flex:1;">
-                        <label for="priority" style="display:block;font-size:13px;color:#334155;">Prioridade</label>
-                        <select name="priority" id="priority" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;margin-top:6px;">
-                            <option value="1">Baixa</option>
-                            <option value="2">Média</option>
-                            <option value="3">Alta</option>
-                        </select>
-                    </div>
-
-                    <div style="flex:1;">
-                        <label for="due_date" style="display:block;font-size:13px;color:#334155;">Vence em</label>
-                        <input type="date" name="due_date" id="due_date" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;margin-top:6px;">
+@section('content')
+    <div class="row g-4">
+        <!-- Sidebar / Stats -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <h5 class="card-title mb-4">Estatísticas</h5>
+                    @php
+                        $completed = $tasks->where('is_completed', true)->count();
+                        $pending = $tasks->where('is_completed', false)->count();
+                        $chartData = [
+                            'labels' => ['Concluídas', 'Pendentes'],
+                            'datasets' => [
+                                [
+                                    'data' => [$completed, $pending],
+                                    'backgroundColor' => ['#198754', '#dc3545'],
+                                ],
+                            ],
+                        ];
+                    @endphp
+                    <div class="chart-container">
+                        <canvas id="tasksChart" data-chart='@json($chartData)'></canvas>
                     </div>
                 </div>
-
-                <button type="submit" class="btn" style="margin-top:12px;">Adicionar tarefa</button>
-            </form>
-        </div>
-
-        {{-- Chart and Tasks Container --}}
-        <div style="display:flex;gap:20px;margin-top:18px;align-items:flex-start;">
-            {{-- Task Statistics Chart --}}
-            @php
-                $completed = $tasks->where('is_completed', true)->count();
-                $pending = $tasks->where('is_completed', false)->count();
-                $chartData = [
-                    'labels' => ['Concluídas', 'Pendentes'],
-                    'datasets' => [[
-                        'data' => [$completed, $pending],
-                        'backgroundColor' => ['#10b981', '#ef4444'],
-                        'borderWidth' => 1
-                    ]]
-                ];
-            @endphp
-            <div class="chart-container">
-                <h3 style="margin:0 0 12px 0;color:#0f172a;font-size:18px;">Estatísticas das Tarefas</h3>
-                <canvas id="tasksChart"></canvas>
             </div>
 
-            {{-- List tasks --}}
-            <div style="flex:1;">
-                <h3 style="margin:0 0 8px 0;color:#0f172a;font-size:18px;">Minhas tarefas</h3>
+            <div id="session-data" data-task-completed="{{ session('task_completed') ? 'true' : 'false' }}"
+                style="display:none;"></div>
 
-                @if (isset($tasks) && $tasks->count() > 0)
-                    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
-                        @foreach ($tasks as $task)
-                            @php $taskData = $task->only(["id","title","description","priority","due_date"]) @endphp
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-radius:8px;border:1px solid #e6e9ef;background:#fff;">
-                                <div style="display:flex;gap:12px;align-items:center;">
-                                    <form method="POST" action="{{ url('/tasks/'.$task->id) }}">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="hidden" name="is_completed" value="{{ $task->is_completed ? 0 : 1 }}">
-                                        <button type="submit" style="background:none;border:none;cursor:pointer;margin-right:8px;font-size:18px;">
-                                            {!! $task->is_completed ? '&#x2705;' : '&#x2B1C;' !!}
-                                        </button>
-                                    </form>
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Ações Rápidas</h5>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal"
+                            data-bs-target="#createTaskModal">
+                            Nova Tarefa
+                        </button>
+                        @if ($tasks->count() > 0)
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal"
+                                data-bs-target="#clearAllModal">
+                                Limpar Todas
+                            </button>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                                    <div>
-                                        <div style="font-weight:700;color:#0f172a;">{{ $task->title }}</div>
-                                        @php
-                                            $days = $task->days_remaining; 
-                                            $badgeBg = $days === null ? '#e5e7eb' : ($days < 0 ? '#ef4444' : ($days === 0 ? '#fb923c' : ($days <= 7 ? '#f59e0b' : '#10b981')));
-                                            if ($days === null) {
-                                                $badgeText = '-';
-                                            } elseif ($days < 0) {
-                                                $badgeText = 'Vencida há '.abs($days).' dias';
-                                            } elseif ($days === 0) {
-                                                $badgeText = 'Hoje';
-                                            } else {
-                                                $badgeText = 'Faltam '.$days.' dias';
-                                            }
-                                        @endphp
-                                        <div style="margin-top:4px;margin-bottom:4px;">
-                                            <span style="background:{{ $badgeBg }};color:#0f172a;padding:4px 8px;border-radius:999px;font-size:12px;">{{ $badgeText }}</span>
+        <!-- Task List -->
+        <div class="col-md-8">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">Minhas Tarefas</h4>
+                <span class="badge bg-secondary">{{ $tasks->count() }} total</span>
+            </div>
+
+            @if ($tasks->count() > 0)
+                <div class="row row-cols-1 g-3">
+                    @foreach ($tasks as $task)
+                        <div class="col">
+                            <div class="card task-card priority-{{ $task->priority }}">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            <form method="POST" action="{{ url('/tasks/' . $task->id) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <input type="hidden" name="is_completed"
+                                                    value="{{ $task->is_completed ? 0 : 1 }}">
+                                                <button type="submit" class="btn btn-link p-0 text-decoration-none fs-4">
+                                                    {!! $task->is_completed ? '✅' : '⬜' !!}
+                                                </button>
+                                            </form>
                                         </div>
-                                        <div style="font-size:13px;color:#475569;">{{ $task->description }}</div>
-                                        <div style="font-size:12px;color:#6b7280;margin-top:6px;">
-                                            <span>Prioridade: {{ $task->priority }} • {{ $task->due_status }}</span>
+                                        <div class="flex-grow-1">
+                                            <h5
+                                                class="card-title mb-1 {{ $task->is_completed ? 'text-decoration-line-through text-muted' : '' }}">
+                                                {{ $task->title }}
+                                            </h5>
+                                            <p class="card-text small text-muted mb-2">{{ $task->description }}</p>
+
+                                            @php
+                                                $days = $task->days_remaining;
+                                                $badgeClass =
+                                                    $days === null
+                                                        ? 'bg-light text-dark'
+                                                        : ($days < 0
+                                                            ? 'bg-danger'
+                                                            : ($days === 0
+                                                                ? 'bg-warning text-dark'
+                                                                : ($days <= 7
+                                                                    ? 'bg-info text-dark'
+                                                                    : 'bg-success')));
+                                                if ($days === null) {
+                                                    $badgeText = 'Sem prazo';
+                                                } elseif ($days < 0) {
+                                                    $badgeText = 'Vencida há ' . abs($days) . ' dias';
+                                                } elseif ($days === 0) {
+                                                    $badgeText = 'Vence hoje';
+                                                } else {
+                                                    $badgeText = 'Faltam ' . $days . ' dias';
+                                                }
+                                            @endphp
+                                            <span class="badge {{ $badgeClass }}">{{ $badgeText }}</span>
+                                            <span class="badge bg-light text-dark border">
+                                                Prioridade:
+                                                {{ $task->priority == 3 ? 'Alta' : ($task->priority == 2 ? 'Média' : 'Baixa') }}
+                                            </span>
+                                        </div>
+                                        <div class="ms-3 d-flex gap-2">
+                                            <button class="btn btn-sm btn-outline-primary edit-btn"
+                                                data-task="{{ json_encode($task->only(['id', 'title', 'description', 'priority', 'due_date'])) }}">
+                                                Editar
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger delete-btn"
+                                                data-task-id="{{ $task->id }}" data-task-title="{{ $task->title }}">
+                                                Excluir
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-
-                                <div style="display:flex;gap:8px;align-items:center;">
-                                    <form id="delete-form-{{ $task->id }}" method="POST" action="{{ url('/tasks/'.$task->id) }}" style="display:none;">
-                                        @csrf
-                                        @method('DELETE')
-                                    </form>
-                                    <button class="btn delete-btn" type="button" 
-                                        data-task-id="{{ $task->id }}"
-                                        data-task-title="{{ $task->title }}"
-                                        style="background:#ef4444;border:none;">Remover</button>
-                                    
-                                    <!-- Edit button -->
-                                    <button class="btn edit-btn" type="button" 
-                                        data-task='@json($taskData)'
-                                        style="background:#1d4ed8;border:none;">Editar</button>
-                                </div>
                             </div>
-                        @endforeach
-                    </div>
-                @else
-                    <div style="color:#475569;margin-top:8px;">Nenhuma tarefa encontrada. Adicione sua primeira tarefa!</div>
-                @endif
-            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="text-center py-5 bg-white rounded shadow-sm">
+                    <p class="text-muted mb-0">Nenhuma tarefa encontrada. Comece criando uma!</p>
+                </div>
+            @endif
         </div>
+    </div>
 
-        {{-- Modal for clear all confirmation --}}
-        <div id="clear-modal" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
-            <div style="background:#fff;max-width:520px;margin:0 auto;padding:20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
-                <h2 style="margin:0 0 8px 0;color:#0f172a;">Confirmar exclusão</h2>
-                <p style="color:#475569;margin:0 0 18px 0;">Você tem certeza que deseja excluir <strong>todas</strong> as suas tarefas? Esta ação não pode ser desfeita.</p>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                    <button id="clear-modal-cancel" class="btn" type="button" style="background:#e5e7eb;color:#111827;">Cancelar</button>
-                    <button id="clear-modal-confirm" class="btn" type="button" style="background:#ef4444;border:none;">Sim, excluir todas</button>
-                </div>
-            </div>
-        </div>
-        
-        {{-- Success modal for task completion --}}
-        <div id="success-modal" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
-            <div style="background:#fff;max-width:520px;margin:0 auto;padding:20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
-                <h2 style="margin:0 0 8px 0;color:#0f172a;">Sucesso!</h2>
-                <p style="color:#475569;margin:0 0 18px 0;">Tarefa concluída com sucesso! 🎉</p>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                    <button id="success-modal-close" class="btn" type="button" style="background:#10b981;border:none;">Fechar</button>
-                </div>
-            </div>
-        </div>
-        
-        {{-- Modal for delete task confirmation --}}
-        <div id="delete-modal" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
-            <div style="background:#fff;max-width:520px;margin:0 auto;padding:20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
-                <h2 style="margin:0 0 8px 0;color:#0f172a;">Confirmar exclusão</h2>
-                <p id="delete-modal-text" style="color:#475569;margin:0 0 18px 0;">Você tem certeza que deseja excluir a tarefa "<strong id="delete-task-title"></strong>"? Esta ação não pode ser desfeita.</p>
-                <div style="display:flex;gap:8px;justify-content:flex-end;">
-                    <button id="delete-modal-cancel" class="btn" type="button" style="background:#e5e7eb;color:#111827;">Cancelar</button>
-                    <button id="delete-modal-confirm" class="btn" type="button" style="background:#ef4444;border:none;">Sim, excluir</button>
-                </div>
-            </div>
-        </div>
-        
-        {{-- Edit modal --}}
-        <div id="edit-modal" style="display:none;position:fixed;inset:0;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
-            <div style="background:#fff;max-width:720px;min-width:320px;margin:0 auto;padding:20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
-                <h2 style="margin:0 0 8px 0;color:#0f172a;">Editar tarefa</h2>
-                <form id="edit-form" method="POST" action="" style="display:flex;flex-direction:column;gap:8px;">
+    <!-- Create Task Modal -->
+    <div class="modal fade" id="createTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ url('/tasks') }}">
                     @csrf
-                    @method('PATCH')
-                    <label for="edit-title" style="display:block;font-size:13px;color:#334155;">Título</label>
-                    <input id="edit-title" name="title" type="text" style="padding:10px;border-radius:8px;border:1px solid #e6e9ef;">
-
-                    <label for="edit-description" style="display:block;font-size:13px;color:#334155;">Descrição</label>
-                    <textarea id="edit-description" name="description" rows="3" style="padding:10px;border-radius:8px;border:1px solid #e6e9ef;"></textarea>
-
-                    <div style="display:flex;gap:8px;">
-                        <div style="flex:1;">
-                            <label for="edit-priority" style="display:block;font-size:13px;color:#334155;">Prioridade</label>
-                            <select id="edit-priority" name="priority" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;">
-                                <option value="1">Baixa</option>
-                                <option value="2">Média</option>
-                                <option value="3">Alta</option>
-                            </select>
+                    <div class="modal-header">
+                        <h5 class="modal-title">Nova Tarefa</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Título</label>
+                            <input type="text" name="title" id="title" class="form-control" required>
                         </div>
-
-                        <div style="flex:1;">
-                            <label for="edit-due_date" style="display:block;font-size:13px;color:#334155;">Vence em</label>
-                            <input id="edit-due_date" name="due_date" type="date" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ef;">
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Descrição</label>
+                            <textarea name="description" id="description" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="priority" class="form-label">Prioridade</label>
+                                <select name="priority" id="priority" class="form-select">
+                                    <option value="1">Baixa</option>
+                                    <option value="2">Média</option>
+                                    <option value="3">Alta</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="due_date" class="form-label">Vencimento</label>
+                                <input type="date" name="due_date" id="due_date" class="form-control">
+                            </div>
                         </div>
                     </div>
-
-                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
-                        <button id="edit-cancel" type="button" class="btn" style="background:#e5e7eb;color:#111827;">Cancelar</button>
-                        <button id="edit-save" type="submit" class="btn" style="background:#10b981;border:none;">Salvar</button>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Criar Tarefa</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-</div>
-</body>
+
+    <!-- Edit Task Modal -->
+    <div class="modal fade" id="editTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="edit-form" method="POST" action="">
+                    @csrf
+                    @method('PATCH')
+                    <div class="modal-header">
+                        <h5 class="modal-title">Editar Tarefa</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="edit-title" class="form-label">Título</label>
+                            <input type="text" name="title" id="edit-title" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-description" class="form-label">Descrição</label>
+                            <textarea name="description" id="edit-description" class="form-control" rows="3"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-priority" class="form-label">Prioridade</label>
+                                <select name="priority" id="edit-priority" class="form-select">
+                                    <option value="1">Baixa</option>
+                                    <option value="2">Média</option>
+                                    <option value="3">Alta</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="edit-due_date" class="form-label">Vencimento</label>
+                                <input type="date" name="due_date" id="edit-due_date" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirmar Exclusão</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    Tem certeza que deseja excluir a tarefa "<strong id="delete-task-title"></strong>"?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form id="delete-form" method="POST" action="">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-danger">Excluir</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear All Confirmation Modal -->
+    <div class="modal fade" id="clearAllModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger">Atenção!</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    Você tem certeza que deseja excluir <strong>todas</strong> as suas tarefas? Esta ação não pode ser
+                    desfeita.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form method="POST" action="{{ route('tasks.clear') }}">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-danger">Sim, excluir todas</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal (Task Completed) -->
+    <div class="modal fade" id="successModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <div class="fs-1 text-success mb-3">🎉</div>
+                    <h4>Parabéns!</h4>
+                    <p class="text-muted">Tarefa concluída com sucesso!</p>
+                    <button type="button" class="btn btn-success" data-bs-dismiss="modal">Fechar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+@endsection
+
+@section('scripts')
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var openBtn = document.getElementById('clear-all-btn');
-        var modal = document.getElementById('clear-modal');
-        var cancelBtn = document.getElementById('clear-modal-cancel');
-        var confirmBtn = document.getElementById('clear-modal-confirm');
-        var form = document.getElementById('clear-all-form');
-
-        if (openBtn && modal) {
-            openBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                modal.style.display = 'flex';
-            });
-        }
-
-        if (cancelBtn && modal) {
-            cancelBtn.addEventListener('click', function() {
-                modal.style.display = 'none';
-            });
-        }
-
-        if (confirmBtn && form) {
-            confirmBtn.addEventListener('click', function() {
-                form.submit();
-            });
-        }
-        
-        // Success modal for task completion
-        var successModal = document.getElementById('success-modal');
-        var successCloseBtn = document.getElementById('success-modal-close');
-
-        if (successCloseBtn && successModal) {
-            successCloseBtn.addEventListener('click', function() {
-                successModal.style.display = 'none';
-            });
-        }
-
-        // Show success modal if task was just completed
-        @if (session('task_completed'))
-            if (successModal) {
-                successModal.style.display = 'flex';
-            }
-        @endif
-        
-        // Delete modal logic
-        var deleteModal = document.getElementById('delete-modal');
-        var deleteModalText = document.getElementById('delete-modal-text');
-        var deleteTaskTitle = document.getElementById('delete-task-title');
-        var deleteCancelBtn = document.getElementById('delete-modal-cancel');
-        var deleteConfirmBtn = document.getElementById('delete-modal-confirm');
-        var currentDeleteForm = null;
-
-        function openDeleteModal(taskId, taskTitle) {
-            deleteTaskTitle.textContent = taskTitle;
-            currentDeleteForm = document.getElementById('delete-form-' + taskId);
-            deleteModal.style.display = 'flex';
-        }
-
-        function closeDeleteModal() {
-            deleteModal.style.display = 'none';
-            currentDeleteForm = null;
-        }
-
-        if (deleteCancelBtn && deleteModal) {
-            deleteCancelBtn.addEventListener('click', function() {
-                closeDeleteModal();
-            });
-        }
-
-        if (deleteConfirmBtn && currentDeleteForm) {
-            deleteConfirmBtn.addEventListener('click', function() {
-                if (currentDeleteForm) {
-                    currentDeleteForm.submit();
-                }
-            });
-        }
-
-        // Close delete modal by clicking outside
-        deleteModal.addEventListener('click', function(e) {
-            if (e.target === deleteModal) {
-                closeDeleteModal();
-            }
-        });
-
-        // Attach event listeners to all delete buttons
-        document.querySelectorAll('.delete-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var taskId = btn.getAttribute('data-task-id');
-                var taskTitle = btn.getAttribute('data-task-title');
-                openDeleteModal(taskId, taskTitle);
-            });
-        });
-        
-        // Edit modal logic
-        var editModal = document.getElementById('edit-modal');
-        var editForm = document.getElementById('edit-form');
-        var editCancel = document.getElementById('edit-cancel');
-        var editTitle = document.getElementById('edit-title');
-        var editDescription = document.getElementById('edit-description');
-        var editPriority = document.getElementById('edit-priority');
-        var editDueDate = document.getElementById('edit-due_date');
-
-        function openEditModal(taskData) {
-            editForm.action = '/tasks/' + taskData.id;
-            editTitle.value = taskData.title || '';
-            editDescription.value = taskData.description || '';
-            editPriority.value = taskData.priority || '1';
-            editDueDate.value = taskData.due_date || '';
-            editModal.style.display = 'flex';
-            editTitle.focus();
-        }
-
-        function closeEditModal() {
-            editModal.style.display = 'none';
-        }
-
-        editCancel.addEventListener('click', function() {
-            closeEditModal();
-        });
-        
-        // Close modal by clicking outside the content
-        editModal.addEventListener('click', function(e) {
-            if (e.target === editModal) {
-                closeEditModal();
-            }
-        });
-
-        // Close on Escape
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeEditModal();
-            }
-        });
-
-        // Attach event listeners to all edit buttons
-        document.querySelectorAll('.edit-btn').forEach(function(btn) {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                var payload = btn.getAttribute('data-task');
-                var taskData = {};
-                try {
-                    taskData = JSON.parse(payload);
-                } catch (err) {
-                    console.warn('Invalid task data', err);
-                }
-                // normalize date format; ensure due_date is 'Y-m-d' if present
-                if (taskData.due_date && taskData.due_date.indexOf(' ') !== -1) {
-                    taskData.due_date = taskData.due_date.split(' ')[0];
-                }
-                openEditModal(taskData);
-            });
-        });
-
-        // Render tasks chart
-        var ctx = document.getElementById('tasksChart').getContext('2d');
-        var chartData = @json($chartData);
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: chartData,
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true
+        document.addEventListener('DOMContentLoaded', function() {
+            // Chart logic
+            const chartElement = document.getElementById('tasksChart');
+            if (chartElement) {
+                const ctx = chartElement.getContext('2d');
+                const chartData = JSON.parse(chartElement.dataset.chart);
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
                         }
                     }
-                },
-                animation: {
-                    animateScale: true,
-                    animateRotate: true
+                });
+            }
+
+            // Edit logic
+            const editModalElement = document.getElementById('editTaskModal');
+            const editModal = editModalElement ? new bootstrap.Modal(editModalElement) : null;
+            const editForm = document.getElementById('edit-form');
+
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const task = JSON.parse(this.dataset.task);
+                    if (editForm) editForm.action = '/tasks/' + task.id;
+                    document.getElementById('edit-title').value = task.title;
+                    document.getElementById('edit-description').value = task.description || '';
+                    document.getElementById('edit-priority').value = task.priority;
+                    document.getElementById('edit-due_date').value = task.due_date ? task.due_date
+                        .split('T')[0] : '';
+                    if (editModal) editModal.show();
+                });
+            });
+
+            // Delete logic
+            const deleteModalElement = document.getElementById('deleteModal');
+            const deleteModal = deleteModalElement ? new bootstrap.Modal(deleteModalElement) : null;
+            const deleteForm = document.getElementById('delete-form');
+            const deleteTaskTitle = document.getElementById('delete-task-title');
+
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const id = this.dataset.taskId;
+                    const title = this.dataset.taskTitle;
+                    if (deleteForm) deleteForm.action = '/tasks/' + id;
+                    if (deleteTaskTitle) deleteTaskTitle.textContent = title;
+                    if (deleteModal) deleteModal.show();
+                });
+            });
+
+            // Success modal
+            const sessionData = document.getElementById('session-data');
+            if (sessionData && sessionData.dataset.taskCompleted === 'true') {
+                const successModalElement = document.getElementById('successModal');
+                if (successModalElement) {
+                    const successModal = new bootstrap.Modal(successModalElement);
+                    successModal.show();
                 }
             }
         });
-    });
     </script>
-</html>
+@endsection
